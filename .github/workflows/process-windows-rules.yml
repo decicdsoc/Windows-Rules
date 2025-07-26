@@ -1,0 +1,58 @@
+name: Process Windows Detection Rules
+
+on:
+  push:
+    paths:
+      - 'synced/Elastic/windows/**'
+      - 'synced/Sigma/windows/**'
+      - 'synced/Yamato/sysmon/**'
+  schedule:
+    - cron: '0 2 * * *' # every day at 2 AM UTC
+
+jobs:
+  collect-windows-rules:
+    runs-on: ubuntu-latest
+    name: Collect Windows Detection Rules
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Combine YAML rules into JSON list
+        run: |
+          mkdir -p output
+          echo "[]" > output/windows_rules.json
+
+          for dir in synced/Elastic/windows synced/Sigma/windows synced/Yamato/sysmon; do
+            for file in $dir/*.yml $dir/*.yaml; do
+              [ -f "$file" ] || continue
+              echo "Processing $file"
+              python3 -c "
+import yaml, json
+from pathlib import Path
+
+file = Path('$file')
+data = yaml.safe_load(file.read_text())
+out_path = Path('output/windows_rules.json')
+existing = json.loads(out_path.read_text())
+existing.append(data)
+out_path.write_text(json.dumps(existing, indent=2))
+"
+            done
+          done
+
+      - name: Upload combined rule file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows_rules_combined
+          path: output/windows_rules.json
