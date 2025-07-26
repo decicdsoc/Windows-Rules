@@ -1,22 +1,41 @@
-name: Debug Windows Rules Workflow
+name: Collect Windows Rules
 
 on:
-  workflow_dispatch:  # Manually trigger from GitHub UI
+  workflow_dispatch:  # Manual trigger for now (you can add schedule or push trigger)
 
 jobs:
-  debug-rules:
+  collect-and-save:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: List rule files
+      - name: Set Git user
         run: |
-          echo "Elastic Rules:"
-          find synced/Elastic/windows -name '*.yml' -o -name '*.yaml' || echo "Not found"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          echo "Sigma Rules:"
-          find synced/Sigma/windows -name '*.yml' -o -name '*.yaml' || echo "Not found"
+      - name: Create Windows folder and copy rules
+        run: |
+          mkdir -p Windows
 
-          echo "Yamato Rules:"
-          find synced/Yamato/sysmon -name '*.yml' -o -name '*.yaml' || echo "Not found"
+          # Copy from all sources
+          cp synced/Elastic/windows/*.yml Windows/ 2>/dev/null || true
+          cp synced/Elastic/windows/*.yaml Windows/ 2>/dev/null || true
+
+          cp synced/Sigma/windows/*.yml Windows/ 2>/dev/null || true
+          cp synced/Sigma/windows/*.yaml Windows/ 2>/dev/null || true
+
+          cp synced/Yamato/sysmon/*.yml Windows/ 2>/dev/null || true
+          cp synced/Yamato/sysmon/*.yaml Windows/ 2>/dev/null || true
+
+      - name: Commit and push changes
+        run: |
+          git add Windows
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update Windows rules folder with latest copies"
+            git push
+          fi
