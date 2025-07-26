@@ -1,0 +1,117 @@
+name: Collect Windows Security Rules
+
+on:
+  schedule:
+    - cron: '0 */8 * * *'  # Run every 8 hours at minute 0[3][4]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  collect-rules:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout current repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create windows directory
+      run: |
+        mkdir -p windows
+        rm -rf windows/*  # Clear existing files
+    
+    - name: Clone Hayabusa Rules Repository
+      uses: actions/checkout@v4
+      with:
+        repository: Yamato-Security/hayabusa-rules
+        path: temp-hayabusa
+        sparse-checkout: |
+          sigma/sysmon
+        sparse-checkout-cone-mode: false
+    
+    - name: Clone Elastic Detection Rules Repository
+      uses: actions/checkout@v4
+      with:
+        repository: elastic/detection-rules
+        path: temp-elastic
+        sparse-checkout: |
+          rules/windows
+        sparse-checkout-cone-mode: false
+    
+    - name: Clone SigmaHQ Rules Repository
+      uses: actions/checkout@v4
+      with:
+        repository: SigmaHQ/sigma
+        path: temp-sigma
+        sparse-checkout: |
+          rules-threat-hunting/windows
+        sparse-checkout-cone-mode: false
+    
+    - name: Copy rules to windows folder
+      run: |
+        # Copy Hayabusa sysmon rules
+        if [ -d "temp-hayabusa/sigma/sysmon" ]; then
+          mkdir -p windows/hayabusa-sysmon
+          cp -r temp-hayabusa/sigma/sysmon/* windows/hayabusa-sysmon/ 2>/dev/null || true
+          echo "Copied Hayabusa sysmon rules"
+        fi
+        
+        # Copy Elastic Windows rules
+        if [ -d "temp-elastic/rules/windows" ]; then
+          mkdir -p windows/elastic-windows
+          cp -r temp-elastic/rules/windows/* windows/elastic-windows/ 2>/dev/null || true
+          echo "Copied Elastic Windows rules"
+        fi
+        
+        # Copy SigmaHQ threat hunting rules
+        if [ -d "temp-sigma/rules-threat-hunting/windows" ]; then
+          mkdir -p windows/sigma-threat-hunting
+          cp -r temp-sigma/rules-threat-hunting/windows/* windows/sigma-threat-hunting/ 2>/dev/null || true
+          echo "Copied SigmaHQ threat hunting rules"
+        fi
+        
+        # Create a README with collection info
+        cat > windows/README.md << EOF
+        # Windows Security Rules Collection
+        
+        This folder contains security detection rules collected from multiple sources:
+        
+        ## Sources
+        - **hayabusa-sysmon/**: Rules from Yamato-Security/hayabusa-rules (sigma/sysmon)
+        - **elastic-windows/**: Rules from elastic/detection-rules (rules/windows)  
+        - **sigma-threat-hunting/**: Rules from SigmaHQ/sigma (rules-threat-hunting/windows)
+        
+        Last updated: $(date -u)
+        
+        ## Rule Counts
+        - Hayabusa Sysmon: $(find windows/hayabusa-sysmon -type f 2>/dev/null | wc -l) files
+        - Elastic Windows: $(find windows/elastic-windows -type f 2>/dev/null | wc -l) files
+        - Sigma Threat Hunting: $(find windows/sigma-threat-hunting -type f 2>/dev/null | wc -l) files
+        
+        Total: $(find windows -name "*.yml" -o -name "*.yaml" -o -name "*.toml" 2>/dev/null | wc -l) rule files
+        EOF
+    
+    - name: Cleanup temporary directories
+      run: |
+        rm -rf temp-hayabusa temp-elastic temp-sigma
+    
+    - name: Check for changes
+      id: changes
+      run: |
+        git add windows/
+        if git diff --staged --quiet; then
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "No changes detected"
+        else
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "Changes detected"
+        fi
+    
+    - name: Commit and push changes
+      if: steps.changes.outputs.changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add windows/
+        git commit -m "Update Windows security rules collection - $(date -u)"
+        git push
