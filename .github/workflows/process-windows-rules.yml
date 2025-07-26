@@ -1,58 +1,22 @@
-name: Process Windows Detection Rules
+name: Debug Windows Rules Workflow
 
 on:
-  push:
-    paths:
-      - 'synced/Elastic/windows/**'
-      - 'synced/Sigma/windows/**'
-      - 'synced/Yamato/sysmon/**'
-  schedule:
-    - cron: '0 2 * * *' # every day at 2 AM UTC
+  workflow_dispatch:  # Manually trigger from GitHub UI
 
 jobs:
-  collect-windows-rules:
+  debug-rules:
     runs-on: ubuntu-latest
-    name: Collect Windows Detection Rules
-
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: List rule files
         run: |
-          python -m pip install --upgrade pip
-          pip install pyyaml
+          echo "Elastic Rules:"
+          find synced/Elastic/windows -name '*.yml' -o -name '*.yaml' || echo "Not found"
 
-      - name: Combine YAML rules into JSON list
-        run: |
-          mkdir -p output
-          echo "[]" > output/windows_rules.json
+          echo "Sigma Rules:"
+          find synced/Sigma/windows -name '*.yml' -o -name '*.yaml' || echo "Not found"
 
-          for dir in synced/Elastic/windows synced/Sigma/windows synced/Yamato/sysmon; do
-            for file in $dir/*.yml $dir/*.yaml; do
-              [ -f "$file" ] || continue
-              echo "Processing $file"
-              python3 -c "
-import yaml, json
-from pathlib import Path
-
-file = Path('$file')
-data = yaml.safe_load(file.read_text())
-out_path = Path('output/windows_rules.json')
-existing = json.loads(out_path.read_text())
-existing.append(data)
-out_path.write_text(json.dumps(existing, indent=2))
-"
-            done
-          done
-
-      - name: Upload combined rule file as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows_rules_combined
-          path: output/windows_rules.json
+          echo "Yamato Rules:"
+          find synced/Yamato/sysmon -name '*.yml' -o -name '*.yaml' || echo "Not found"
