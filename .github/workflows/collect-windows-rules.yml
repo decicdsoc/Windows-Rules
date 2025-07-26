@@ -2,116 +2,126 @@ name: Collect Windows Security Rules
 
 on:
   schedule:
-    - cron: '0 */8 * * *'  # Run every 8 hours at minute 0[3][4]
+    - cron: '0 */8 * * *'  # Run every 8 hours
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
   collect-rules:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write  # Required for pushing changes
+    
     steps:
     - name: Checkout current repository
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
     
     - name: Create windows directory
       run: |
         mkdir -p windows
         rm -rf windows/*  # Clear existing files
     
-    - name: Clone Hayabusa Rules Repository
-      uses: actions/checkout@v4
-      with:
-        repository: Yamato-Security/hayabusa-rules
-        path: temp-hayabusa
-        sparse-checkout: |
-          sigma/sysmon
-        sparse-checkout-cone-mode: false
-    
-    - name: Clone Elastic Detection Rules Repository
-      uses: actions/checkout@v4
-      with:
-        repository: elastic/detection-rules
-        path: temp-elastic
-        sparse-checkout: |
-          rules/windows
-        sparse-checkout-cone-mode: false
-    
-    - name: Clone SigmaHQ Rules Repository
-      uses: actions/checkout@v4
-      with:
-        repository: SigmaHQ/sigma
-        path: temp-sigma
-        sparse-checkout: |
-          rules-threat-hunting/windows
-        sparse-checkout-cone-mode: false
-    
-    - name: Copy rules to windows folder
+    - name: Clone and collect Hayabusa Rules
       run: |
-        # Copy Hayabusa sysmon rules
-        if [ -d "temp-hayabusa/sigma/sysmon" ]; then
-          mkdir -p windows/hayabusa-sysmon
-          cp -r temp-hayabusa/sigma/sysmon/* windows/hayabusa-sysmon/ 2>/dev/null || true
-          echo "Copied Hayabusa sysmon rules"
-        fi
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/Yamato-Security/hayabusa-rules.git temp-hayabusa
+        cd temp-hayabusa
+        git sparse-checkout set sigma/sysmon
+        cd ..
         
-        # Copy Elastic Windows rules
-        if [ -d "temp-elastic/rules/windows" ]; then
-          mkdir -p windows/elastic-windows
-          cp -r temp-elastic/rules/windows/* windows/elastic-windows/ 2>/dev/null || true
-          echo "Copied Elastic Windows rules"
-        fi
+        # Copy Hayabusa rules with prefix
+        find temp-hayabusa/sigma/sysmon -type f \( -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | while read file; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            cp "$file" "windows/hayabusa-${filename}" 2>/dev/null || true
+          fi
+        done
         
-        # Copy SigmaHQ threat hunting rules
-        if [ -d "temp-sigma/rules-threat-hunting/windows" ]; then
-          mkdir -p windows/sigma-threat-hunting
-          cp -r temp-sigma/rules-threat-hunting/windows/* windows/sigma-threat-hunting/ 2>/dev/null || true
-          echo "Copied SigmaHQ threat hunting rules"
-        fi
+        echo "Copied Hayabusa sysmon rules"
+    
+    - name: Clone and collect Elastic Detection Rules
+      run: |
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/elastic/detection-rules.git temp-elastic
+        cd temp-elastic
+        git sparse-checkout set rules/windows
+        cd ..
         
-        # Create a README with collection info
+        # Copy Elastic rules with prefix
+        find temp-elastic/rules/windows -type f \( -name "*.toml" -o -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | while read file; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            cp "$file" "windows/elastic-${filename}" 2>/dev/null || true
+          fi
+        done
+        
+        echo "Copied Elastic Windows rules"
+    
+    - name: Clone and collect SigmaHQ Rules
+      run: |
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/SigmaHQ/sigma.git temp-sigma
+        cd temp-sigma
+        git sparse-checkout set rules-threat-hunting/windows
+        cd ..
+        
+        # Copy SigmaHQ rules with prefix
+        find temp-sigma/rules-threat-hunting/windows -type f \( -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | while read file; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            cp "$file" "windows/sigma-${filename}" 2>/dev/null || true
+          fi
+        done
+        
+        echo "Copied SigmaHQ threat hunting rules"
+    
+    - name: Create collection summary
+      run: |
+        # Count files by type
+        hayabusa_count=$(find windows -name "hayabusa-*" 2>/dev/null | wc -l)
+        elastic_count=$(find windows -name "elastic-*" 2>/dev/null | wc -l)
+        sigma_count=$(find windows -name "sigma-*" 2>/dev/null | wc -l)
+        total_count=$(find windows -type f 2>/dev/null | wc -l)
+        
+        # Create README
         cat > windows/README.md << EOF
         # Windows Security Rules Collection
         
-        This folder contains security detection rules collected from multiple sources:
+        This folder contains security detection rules collected from multiple sources, all in one directory.
         
-        ## Sources
-        - **hayabusa-sysmon/**: Rules from Yamato-Security/hayabusa-rules (sigma/sysmon)
-        - **elastic-windows/**: Rules from elastic/detection-rules (rules/windows)  
-        - **sigma-threat-hunting/**: Rules from SigmaHQ/sigma (rules-threat-hunting/windows)
+        ## Sources & File Naming
+        - **hayabusa-\*.yml**: Rules from Yamato-Security/hayabusa-rules (sigma/sysmon)
+        - **elastic-\*.toml**: Rules from elastic/detection-rules (rules/windows)  
+        - **sigma-\*.yml**: Rules from SigmaHQ/sigma (rules-threat-hunting/windows)
         
-        Last updated: $(date -u)
+        ## Statistics
+        - Hayabusa Sysmon rules: ${hayabusa_count}
+        - Elastic Windows rules: ${elastic_count}
+        - Sigma Threat Hunting rules: ${sigma_count}
+        - **Total rule files: ${total_count}**
         
-        ## Rule Counts
-        - Hayabusa Sysmon: $(find windows/hayabusa-sysmon -type f 2>/dev/null | wc -l) files
-        - Elastic Windows: $(find windows/elastic-windows -type f 2>/dev/null | wc -l) files
-        - Sigma Threat Hunting: $(find windows/sigma-threat-hunting -type f 2>/dev/null | wc -l) files
-        
-        Total: $(find windows -name "*.yml" -o -name "*.yaml" -o -name "*.toml" 2>/dev/null | wc -l) rule files
+        Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
         EOF
+        
+        echo "Created summary with ${total_count} total rules"
     
     - name: Cleanup temporary directories
       run: |
         rm -rf temp-hayabusa temp-elastic temp-sigma
     
-    - name: Check for changes
-      id: changes
+    - name: Configure git
       run: |
-        git add windows/
-        if git diff --staged --quiet; then
-          echo "changed=false" >> $GITHUB_OUTPUT
-          echo "No changes detected"
-        else
-          echo "changed=true" >> $GITHUB_OUTPUT
-          echo "Changes detected"
-        fi
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
     
-    - name: Commit and push changes
-      if: steps.changes.outputs.changed == 'true'
+    - name: Check for changes and commit
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
         git add windows/
-        git commit -m "Update Windows security rules collection - $(date -u)"
-        git push
+        
+        if git diff --staged --quiet; then
+          echo "No changes detected - skipping commit"
+        else
+          echo "Changes detected - committing updates"
+          git commit -m "Update Windows security rules collection - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          git push
+        fi
