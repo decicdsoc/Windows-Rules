@@ -1,34 +1,34 @@
-name: Collect Windows Rules
+name: Process Windows Rules
 
 on:
-  workflow_dispatch:  # Manual trigger for now (you can add schedule or push trigger)
+  schedule:
+    - cron: '0 */6 * * *' # Every 6 hours
+  workflow_dispatch: # Allow manual trigger from GitHub UI
 
 jobs:
-  collect-and-save:
+  sync-windows-rules:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set Git user
+      - name: Set up Git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create Windows folder and copy rules
+      - name: Recreate Windows folder and copy rules
         run: |
-          mkdir -p Windows
+          rm -rf Windows
+          mkdir Windows
 
-          # Copy from all sources
-          cp synced/Elastic/windows/*.yml Windows/ 2>/dev/null || true
-          cp synced/Elastic/windows/*.yaml Windows/ 2>/dev/null || true
+          find synced/Elastic/windows -type f \( -iname "*.yml" -o -iname "*.yaml" \) -exec cp {} Windows/ \;
+          find synced/Sigma/windows -type f \( -iname "*.yml" -o -iname "*.yaml" \) -exec cp {} Windows/ \;
+          find synced/Yamato/sysmon -type f \( -iname "*.yml" -o -iname "*.yaml" \) -exec cp {} Windows/ \;
 
-          cp synced/Sigma/windows/*.yml Windows/ 2>/dev/null || true
-          cp synced/Sigma/windows/*.yaml Windows/ 2>/dev/null || true
-
-          cp synced/Yamato/sysmon/*.yml Windows/ 2>/dev/null || true
-          cp synced/Yamato/sysmon/*.yaml Windows/ 2>/dev/null || true
+          echo "Total rules copied:"
+          ls -l Windows | wc -l
 
       - name: Commit and push changes
         run: |
@@ -36,6 +36,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "Update Windows rules folder with latest copies"
+            git commit -m "Update Windows rules folder with latest rules"
             git push
           fi
