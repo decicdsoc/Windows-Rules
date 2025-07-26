@@ -1,41 +1,45 @@
-name: Process Windows Rules
+name: Export Windows Rules
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Every 6 hours
-  workflow_dispatch: # Allow manual trigger from GitHub UI
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  sync-windows-rules:
+  export:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Git identity
+      - name: Set up Git user
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Recreate Windows folder and copy rules
+      - name: Collect all Windows rules into /Windows
         run: |
           rm -rf Windows
-          mkdir Windows
+          mkdir -p Windows
 
           find synced/Elastic/windows -type f \( -iname "*.yml" -o -iname "*.yaml" \) -exec cp {} Windows/ \;
           find synced/Sigma/windows -type f \( -iname "*.yml" -o -iname "*.yaml" \) -exec cp {} Windows/ \;
           find synced/Yamato/sysmon -type f \( -iname "*.yml" -o -iname "*.yaml" \) -exec cp {} Windows/ \;
 
-          echo "Total rules copied:"
+          echo "Copied rules:"
           ls -l Windows | wc -l
 
-      - name: Commit and push changes
+      - name: Commit and push Windows folder
         run: |
-          git add Windows
+          git add Windows/
           if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "Update Windows rules folder with latest rules"
-            git push
+            echo "No changes detected"
+            exit 0
           fi
+          git commit -m "chore: export Windows rules [automated]"
+          git push
