@@ -9,8 +9,8 @@ This folder contains security detection rules collected from multiple sources, a
 
 ## Statistics
 - Hayabusa Sysmon rules: 2249
-- Elastic Windows rules: 436
+- Elastic Windows rules: 437
 - Sigma Threat Hunting rules: 113
-- **Total rule files: 2798**
+- **Total rule files: 2799**
 
-Last updated: 2025-08-01 08:31:05 UTC
+Last updated: 2025-08-01 16:29:10 UTC
