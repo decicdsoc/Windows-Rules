@@ -18,6 +18,7 @@ tags:
     - attack.persistence
     - attack.t1112
     - attack.t1047
+    - detection.emerging-threats
     - sysmon
 logsource:
     product: windows
