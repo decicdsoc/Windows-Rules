@@ -8,9 +8,9 @@ This folder contains security detection rules collected from multiple sources, a
 - **sigma-\*.yml**: Rules from SigmaHQ/sigma (rules-threat-hunting/windows)
 
 ## Statistics
-- Hayabusa Sysmon rules: 2357
+- Hayabusa Sysmon rules: 2361
 - Elastic Windows rules: 476
 - Sigma Threat Hunting rules: 126
-- **Total rule files: 2959**
+- **Total rule files: 2963**
 
-Last updated: 2026-03-29 16:37:20 UTC
+Last updated: 2026-03-30 02:38:43 UTC
