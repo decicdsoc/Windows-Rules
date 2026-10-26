@@ -13,4 +13,4 @@ This folder contains security detection rules collected from multiple sources, a
 - Sigma Threat Hunting rules: 129
 - **Total rule files: 3034**
 
-Last updated: 2026-10-25 18:45:22 UTC
+Last updated: 2026-10-26 03:38:26 UTC
